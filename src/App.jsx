@@ -13,7 +13,7 @@ const ROLES = [
   { id: "기타", color: "#94a3b8", bg: "#20242c", text: "#cbd5e1" },
 ];
 
-const ADMIN_PASSWORD = "admin1234";
+const ADMIN_PASSWORD = "gamegogame";
 
 function roleMeta(id) {
   return ROLES.find((r) => r.id === id) || ROLES[4];
