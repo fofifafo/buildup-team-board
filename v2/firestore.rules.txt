@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return signedIn() && myProfile().isAdmin == true;
+    }
+    function isApproved() {
+      return signedIn() && (myProfile().status == "approved" || myProfile().isAdmin == true);
+    }
+
+    // 회원 정보: 본인과 관리자만 조회, 목록 조회는 관리자만
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      // 가입: 본인 문서를 pending 상태로만 생성 가능, isAdmin 필드 삽입 금지
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.status == "pending"
+        && !("isAdmin" in request.resource.data);
+      // 승인/거절/수정, 삭제는 관리자만
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 게시글: 승인된 회원만 조회/작성, 수정·삭제는 작성자와 관리자만
+    match /posts/{postId} {
+      allow read: if isApproved();
+      allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
+      allow update: if isAdmin() || (isApproved() && resource.data.authorUid == request.auth.uid);
+      allow delete: if isAdmin() || (isApproved() && resource.data.authorUid == request.auth.uid);
+
+      // 지원서/연락: 승인된 회원이 본인 명의로만 제출,
+      // 열람은 글 작성자와 관리자만 (다른 지원자끼리는 서로 볼 수 없음)
+      match /responses/{rid} {
+        allow read: if signedIn() && (isAdmin() || resource.data.postAuthorUid == request.auth.uid);
+        allow create: if isApproved() && request.resource.data.fromUid == request.auth.uid;
+        allow update: if signedIn() && resource.data.postAuthorUid == request.auth.uid;
+        allow delete: if isAdmin() || (signedIn() && resource.data.postAuthorUid == request.auth.uid);
+      }
+    }
+  }
+}
